@@ -1,12 +1,11 @@
 MIT License
 
-This project is based on [btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server).
+Original: Copyright (c) 2025 Wouter Lemaire
+CALM Version: Copyright (c) 2026 Philipp Doelker
+
+This project is based on the original project [btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server) by Wouter Lemaire. 
 
 Licensed under the MIT License. 
-
-Original: Copyright (c) 2025 Wouter Le Maire.
-
-CALM Version: Copyright (c) 2026 Philipp Doelker
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
