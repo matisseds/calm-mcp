@@ -1,5 +1,7 @@
 # SAP Cloud ALM MCP Server
 
+Project is based on [btp-sap-odata-to-mcp-server](https://github.com/lemaiwo/btp-sap-odata-to-mcp-server) by [Wouter Lemaire](https://github.com/lemaiwo)
+
 MCP Server for SAP Cloud ALM APIs, deployed on SAP BTP Cloud Foundry.
 
 ## Project Structure
