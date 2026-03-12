@@ -34,8 +34,10 @@ xs-security.json                   # XSUAA security configuration
 | Tool | API Endpoint | Description |
 |------|-------------|-------------|
 | `get-landscape-info` | `/calm-landscape/v1/landscapeObjects` | Query landscape objects with optional filters (name, objectType, role, serviceType, etc.) |
+| `find-property-capable-landscape-objects` | `/calm-landscape/v1/landscapeObjects` | Query landscape objects and filter out `BusinessService` entries so the result is better suited for property lookup |
 | `get-landscape-property-info` | `/calm-landscape/v1/properties` | Get properties for a single landscape object by ID |
 | `get-status-events` | `/bsm-service/v1/events` | Query status events with optional filters (type, eventType, serviceName, period, etc.) |
+| `gather-incident-context` | Composite | Gather status events, related landscape objects, and heuristic next checks for AI incident analysis |
 
 All tools require the `read` scope via the `CALMViewer` role.
 
@@ -101,3 +103,10 @@ This executes `cds bind --exec -- npm run start:http`, which:
 1. Fetches service keys for bound XSUAA, Destination, and Connectivity instances
 2. Sets `VCAP_SERVICES` in the local environment
 3. Builds and starts the HTTP server on `http://localhost:3000`
+
+### Local Dashboards
+
+- `GET /dashboard`
+  Guided user mode for non-technical workflows such as finding systems, reviewing disruptions, and gathering incident context. Results now include follow-up buttons so users can move into health checks or incident analysis without editing JSON.
+- `GET /dashboard/dev`
+  Developer mode with raw MCP tool execution, token inspection, and advanced debugging controls.

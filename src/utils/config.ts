@@ -33,6 +33,7 @@ export class Config {
         // Logging Configuration
         this.config.set('log.level', process.env.LOG_LEVEL || 'info');
         this.config.set('node.env', process.env.NODE_ENV || 'development');
+        this.config.set('auth.allowDevScopeBypass', process.env.ALLOW_DEV_SCOPE_BYPASS === 'true');
 
         // Session Configuration
         this.config.set('session.timeoutMs', Number.parseInt(process.env.SESSION_TIMEOUT_MS || '3600000')); // 1 hour default
@@ -97,7 +98,16 @@ export class Config {
      * Includes auto-detected CF hostnames.
      */
     getAllowedHosts(): string[] {
-        return [...new Set(this.cfAppUris)];
+        const port = String(this.get<number>('server.port', 3000));
+        return [
+            ...new Set([
+                ...this.cfAppUris,
+                'localhost',
+                '127.0.0.1',
+                `localhost:${port}`,
+                `127.0.0.1:${port}`
+            ])
+        ];
     }
 
     /**

@@ -10,6 +10,10 @@ import { MCPServer, createMCPServer } from './mcp-server.js';
 import { Logger } from './utils/logger.js';
 import { Config } from './utils/config.js';
 import { AuthService, AuthRequest } from './services/auth-service.js';
+import {
+    renderDashboardHtml,
+    renderDashboardScript
+} from './dashboard.js';
 
 // Global type extensions
 declare global {
@@ -182,6 +186,79 @@ export function createApp(): express.Application {
             activeSessions: sessions.size,
             version: '1.0.0'
         });
+    });
+
+    app.get('/dashboard', (req, res) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.type('html').send(
+            renderDashboardHtml(
+                authService.getApplicationScopes(),
+                config.get<boolean>('auth.allowDevScopeBypass', false)
+            )
+        );
+    });
+
+    app.get('/dashboard/dev', (req, res) => {
+        res.redirect('/dashboard');
+    });
+
+    app.get('/dashboard.js', (req, res) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.type('application/javascript').send(renderDashboardScript());
+    });
+
+    app.get('/debug/token-info', authService.optionalAuthenticateJWT() as express.RequestHandler, async (req, res) => {
+        const authReq = req as AuthRequest;
+
+        if (!authReq.jwtToken || !authReq.authInfo) {
+            return res.status(401).json({
+                error: 'Authentication Required',
+                message: 'Provide a Bearer token to inspect token details.'
+            });
+        }
+
+        try {
+            const payload = JSON.parse(Buffer.from(authReq.jwtToken.split('.')[1], 'base64').toString()) as {
+                scope?: string[] | string;
+                grant_type?: string;
+                user_name?: string;
+                email?: string;
+                aud?: string[];
+                origin?: string;
+            };
+
+            const scopes = Array.isArray(payload.scope)
+                ? payload.scope
+                : typeof payload.scope === 'string'
+                    ? payload.scope.split(' ')
+                    : [];
+
+            const requiredScopes = authService.getApplicationScopes();
+            const missingRequiredScopes = requiredScopes.filter((scope) => !scopes.includes(scope));
+
+            return res.json({
+                username: payload.user_name || authReq.authInfo.getUserName(),
+                email: payload.email || authReq.authInfo.getEmail(),
+                grantType: payload.grant_type || null,
+                origin: payload.origin || null,
+                audiences: payload.aud || [],
+                scopes,
+                requiredScopes,
+                missingRequiredScopes,
+                hasRequiredScopes: missingRequiredScopes.length === 0,
+                devScopeBypassEnabled: config.get<boolean>('auth.allowDevScopeBypass', false)
+            });
+        } catch (error) {
+            logger.error('Failed to inspect token info:', error);
+            return res.status(500).json({
+                error: 'Token inspection failed',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
     });
 
     // Main MCP endpoint - handles all MCP communication
@@ -698,6 +775,9 @@ export function createApp(): express.Application {
             version: '1.0.0',
             endpoints: {
                 'GET /health': 'Health check endpoint',
+                'GET /dashboard': 'Developer dashboard for token inspection and raw tool execution',
+                'GET /dashboard/dev': 'Redirects to /dashboard',
+                'GET /debug/token-info': 'Inspect the current bearer token and required scopes',
                 'POST /mcp': 'Main MCP communication endpoint',
                 'DELETE /mcp': 'Session termination endpoint',
                 'GET /docs': 'This API documentation',
@@ -725,7 +805,7 @@ export function createApp(): express.Application {
         res.status(404).json({
             error: 'Not Found',
             message: `The requested endpoint ${req.method} ${req.path} was not found`,
-            availableEndpoints: ['/health', '/mcp', '/docs']
+            availableEndpoints: ['/health', '/dashboard', '/debug/token-info', '/mcp', '/docs']
         });
     });
 

@@ -41,11 +41,20 @@ export class ToolRegistry {
         // Register the landscape tool
         this.registerLandscapeTool();
 
+        // Register the property-capable landscape helper tool
+        this.registerPropertyCapableLandscapeTool();
+
         // Register the landscape property tool
         this.registerLandscapePropertyTool();
 
         // Register the status events tool
         this.registerStatusEventsTool();
+
+        // Register the incident context tool
+        this.registerIncidentContextTool();
+
+        // Register the recent disruption tool
+        this.registerRecentDisruptionsTool();
 
         this.logger.info('✅ MCP tools registered successfully');
     }
@@ -116,6 +125,73 @@ export class ToolRegistry {
         );
 
         this.logger.debug('Registered tool: get-landscape-info');
+    }
+
+    /**
+     * Property-capable Landscape Tool
+     *
+     * Returns landscape objects that are better candidates for the
+     * landscape properties endpoint by filtering out BusinessService entries.
+     */
+    private registerPropertyCapableLandscapeTool(): void {
+        this.mcpServer.registerTool(
+            "find-property-capable-landscape-objects",
+            {
+                title: "Find Property Capable Landscape Objects",
+                description: "Retrieves landscape objects from SAP Cloud ALM and filters out BusinessService entries so the result is better suited for get-landscape-property-info.",
+                inputSchema: {
+                    name: z.string().optional().describe("Filter by landscape object name, equals SID"),
+                    systemNumber: z.string().optional().describe("Filter by system number"),
+                    objectType: z.string().optional().describe("Filter by object type (e.g. CloudService)"),
+                    source: z.string().optional().describe("Filter by source (e.g. IMPORTED)"),
+                    lmsId: z.string().optional().describe("Filter by LMS ID"),
+                    serviceType: z.string().optional().describe("Filter by service type"),
+                    role: z.string().optional().describe("Filter by role"),
+                    externalId: z.string().optional().describe("Filter by external ID"),
+                    limit: z.number().optional().describe("Maximum number of results to return"),
+                    offset: z.number().optional().describe("Offset for pagination"),
+                    deploymentModel: z.string().optional().describe("Filter by deployment model")
+                }
+            },
+            async (args: Record<string, unknown>) => {
+                try {
+                    const result = await this.sapClient.getPropertyCapableLandscapeInfo({
+                        name: args.name as string | undefined,
+                        systemNumber: args.systemNumber as string | undefined,
+                        objectType: args.objectType as string | undefined,
+                        source: args.source as string | undefined,
+                        lmsId: args.lmsId as string | undefined,
+                        serviceType: args.serviceType as string | undefined,
+                        role: args.role as string | undefined,
+                        externalId: args.externalId as string | undefined,
+                        limit: args.limit as number | undefined,
+                        offset: args.offset as number | undefined,
+                        deploymentModel: args.deploymentModel as string | undefined
+                    });
+
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: result
+                        }]
+                    };
+                } catch (error) {
+                    this.logger.error('Find Property Capable Landscape Objects tool error:', error);
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: JSON.stringify({
+                                error: 'Failed to execute find-property-capable-landscape-objects',
+                                message: error instanceof Error ? error.message : 'Unknown error'
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+            }
+        );
+
+        this.logger.debug('Registered tool: find-property-capable-landscape-objects');
     }
 
         /**
@@ -225,6 +301,133 @@ export class ToolRegistry {
         );
 
         this.logger.debug('Registered tool: get-status-events');
+    }
+
+    /**
+     * Incident Context Tool
+     *
+     * Gathers status events, related landscape objects, and simple analysis hints
+     * so an AI client can reason about an ALM incident with richer context.
+     */
+    private registerIncidentContextTool(): void {
+        this.mcpServer.registerTool(
+            "gather-incident-context",
+            {
+                title: "Gather Incident Context",
+                description: "Collects relevant SAP Cloud ALM status events, related landscape objects, and heuristic next checks for incident analysis.",
+                inputSchema: {
+                    serviceName: z.string().optional().describe("Service name to correlate status events and landscape objects"),
+                    type: z.enum(["BusinessService", "CloudService", "TechnicalSystem"]).optional().describe("Filter by event type category"),
+                    eventType: z.enum(["Maintenance", "Degradation", "Disruption", "Communication", "Planned Availability"]).optional().describe("Filter by status event type"),
+                    serviceType: z.string().optional().describe("Filter by service type"),
+                    period: z.string().optional().describe("Filter by period"),
+                    startTime: z.string().optional().describe("Filter by start time"),
+                    endTime: z.string().optional().describe("Filter by end time"),
+                    limit: z.number().optional().describe("Maximum number of status events to inspect"),
+                    offset: z.number().optional().describe("Offset for pagination"),
+                    rawAlertText: z.string().optional().describe("Optional raw incident text to enrich heuristic analysis")
+                }
+            },
+            async (args: Record<string, unknown>) => {
+                try {
+                    const result = await this.sapClient.gatherIncidentContext({
+                        serviceName: args.serviceName as string | undefined,
+                        type: args.type as TypeEnum | undefined,
+                        eventType: args.eventType as EventTypeEnum | undefined,
+                        serviceType: args.serviceType as string | undefined,
+                        period: args.period as string | undefined,
+                        startTime: args.startTime as string | undefined,
+                        endTime: args.endTime as string | undefined,
+                        limit: args.limit as number | undefined,
+                        offset: args.offset as number | undefined,
+                        rawAlertText: args.rawAlertText as string | undefined
+                    });
+
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: result
+                        }]
+                    };
+                } catch (error) {
+                    this.logger.error('Gather Incident Context tool error:', error);
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: JSON.stringify({
+                                error: 'Failed to execute gather-incident-context',
+                                message: error instanceof Error ? error.message : 'Unknown error'
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+            }
+        );
+
+        this.logger.debug('Registered tool: gather-incident-context');
+    }
+
+    /**
+     * Recent Disruptions Tool
+     *
+     * Retrieves recent Degradation/Disruption events and sorts them by newest first.
+     */
+    private registerRecentDisruptionsTool(): void {
+        this.mcpServer.registerTool(
+            "find-recent-service-disruptions",
+            {
+                title: "Find Recent Service Disruptions",
+                description: "Collects recent SAP Cloud ALM Degradation and Disruption events for incident triage.",
+                inputSchema: {
+                    serviceName: z.string().optional().describe("Service name to filter disruptions"),
+                    type: z.enum(["BusinessService", "CloudService", "TechnicalSystem"]).optional().describe("Filter by event type category"),
+                    eventType: z.enum(["Maintenance", "Degradation", "Disruption", "Communication", "Planned Availability"]).optional().describe("Optional single event type override"),
+                    serviceType: z.string().optional().describe("Filter by service type"),
+                    period: z.string().optional().describe("Filter by period"),
+                    startTime: z.string().optional().describe("Filter by start time"),
+                    endTime: z.string().optional().describe("Filter by end time"),
+                    limit: z.number().optional().describe("Maximum number of status events to inspect"),
+                    offset: z.number().optional().describe("Offset for pagination")
+                }
+            },
+            async (args: Record<string, unknown>) => {
+                try {
+                    const result = await this.sapClient.findRecentServiceDisruptions({
+                        serviceName: args.serviceName as string | undefined,
+                        type: args.type as TypeEnum | undefined,
+                        eventType: args.eventType as EventTypeEnum | undefined,
+                        serviceType: args.serviceType as string | undefined,
+                        period: args.period as string | undefined,
+                        startTime: args.startTime as string | undefined,
+                        endTime: args.endTime as string | undefined,
+                        limit: args.limit as number | undefined,
+                        offset: args.offset as number | undefined
+                    });
+
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: result
+                        }]
+                    };
+                } catch (error) {
+                    this.logger.error('Find Recent Service Disruptions tool error:', error);
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: JSON.stringify({
+                                error: 'Failed to execute find-recent-service-disruptions',
+                                message: error instanceof Error ? error.message : 'Unknown error'
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+            }
+        );
+
+        this.logger.debug('Registered tool: find-recent-service-disruptions');
     }
 
 }
